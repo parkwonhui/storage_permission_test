@@ -9,6 +9,7 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.graphics.drawable.BitmapDrawable;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
@@ -26,7 +27,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -35,17 +41,20 @@ public class MainActivity extends AppCompatActivity {
     private final int REQUEST_CAMERA = 1002;
     private final int REQUEST_READ_STORAGE_IMAGE = 2000;
     private Button imageReadBtn;
-    private Button imageWriteBtn;
-    private ImageView imageView;
+    private Button imageSaveBtn;
+    private ImageView imageView = null;
+    private SimpleDateFormat simpleDateFormat;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        simpleDateFormat = new SimpleDateFormat("yyyyMMdd_hhmmss");
+
         imageView = findViewById(R.id.image_view);
         imageReadBtn = findViewById(R.id.image_read_btn);
-        imageWriteBtn = findViewById(R.id.image_write_btn);
+        imageSaveBtn = findViewById(R.id.image_write_btn);
         imageReadBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -56,10 +65,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        imageWriteBtn.setOnClickListener(new View.OnClickListener() {
+        imageSaveBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                if (imageView == null) {
+                    return;
+                }
 
+                saveImage(((BitmapDrawable) imageView.getDrawable()).getBitmap(), simpleDateFormat.format(new Date()));
             }
         });
 
@@ -86,17 +99,54 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public boolean saveImage(Bitmap bitmap, String saveImageName) {
+        String saveDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).toString()+ "/Mpc";
+        File file = new File(saveDir);
+        if (!file.exists()) {
+            file.mkdir();
+        }
+
+        String fileName = saveImageName + ".png";
+        File tempFile = new File(saveDir, fileName);
+        FileOutputStream output = null;
+
+        try {
+            if (tempFile.createNewFile()) {
+                output = new FileOutputStream(tempFile);
+                // 이미지 줄이기
+                Bitmap newBitmap = bitmap.createScaledBitmap(bitmap, 200, 200, true);
+                // 이미지 압축. 압축된 파일은 output stream에 저장
+                // TODO : 이미지가 심하게 깨진다.....
+                newBitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
+            } else {
+                // 같은 이름의 파일 존재
+                Log.d("TEST_LOG", "같은 이름의 파일 존재:"+saveImageName);
+
+                return false;
+            }
+        } catch (FileNotFoundException e) {
+            Log.d("TEST_LOG", "파일을 찾을 수 없음");
+            return false;
+
+        } catch (IOException e) {
+            Log.d("TEST_LOG", "IO 에러");
+            e.printStackTrace();
+            return false;
+
+        } finally {
+            if (output != null) {
+                try {
+                    output.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return true;
+    }
+
     public Bitmap getImage(Intent intent) {
         Uri imageUri = intent.getData();
-        /*try {
-            // 기존 회전이 안되던 코드
-            InputStream in = getContentResolver().openInputStream(intent.getData());
-            Bitmap img = BitmapFactory.decodeStream(in);
-            in.close();
-            return img;
-        } catch (Exception e) {
-            return null;
-        }*/
 
         String imagePath = getPath(this, imageUri);
         ExifInterface exifInterface = null;
